@@ -1,9 +1,9 @@
 package repository
 
 import (
+	"api_library/internal/entity"
+	"api_library/internal/errors"
 	"database/sql"
-	"excercise_library/internal/entity"
-	"excercise_library/internal/errors"
 	"log"
 	"net/http"
 	"time"

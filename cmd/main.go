@@ -1,9 +1,9 @@
 package main
 
 import (
-	"excercise_library/internal/handler"
-	"excercise_library/internal/repository"
-	"excercise_library/internal/usecase"
+	"api_library/internal/handler"
+	"api_library/internal/repository"
+	"api_library/internal/usecase"
 	"log"
 	"net/http"
 )

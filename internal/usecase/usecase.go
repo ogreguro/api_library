@@ -1,8 +1,8 @@
 package usecase
 
 import (
-	"excercise_library/internal/entity"
-	"excercise_library/internal/repository"
+	"api_library/internal/entity"
+	"api_library/internal/repository"
 	"time"
 )
 

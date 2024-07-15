@@ -1,9 +1,9 @@
 package handler
 
 import (
+	"api_library/internal/entity"
+	"api_library/internal/usecase"
 	"encoding/json"
-	"excercise_library/internal/entity"
-	"excercise_library/internal/usecase"
 	"fmt"
 	"net/http"
 	"strconv"
