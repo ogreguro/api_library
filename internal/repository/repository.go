@@ -4,24 +4,25 @@ import (
 	"api_library/internal/entity"
 	"api_library/internal/errors"
 	"database/sql"
-	"log"
 	"net/http"
-	"time"
+	"strconv"
+	"strings"
 )
 
+// Объявление интерфейса Repository
 type Repository interface {
 	GetAllAuthors() ([]entity.Author, error)
 	GetAuthor(authorID int) (entity.Author, error)
-	CreateAuthor(firstName, lastName, biography string, birthDate time.Time) (int, error)
-	UpdateAuthor(authorID int, firstName, lastName, biography string, birthDate time.Time) error
+	CreateAuthor(firstName, lastName, biography string, birthDate entity.Date) (int, error)
+	UpdateAuthor(author entity.Author) error
 	DeleteAuthor(authorID int) error
 	GetAllBooks() ([]entity.Book, error)
 	GetBooksByAuthor(authorID int) ([]entity.Book, error)
 	GetBook(bookID int) (entity.Book, error)
 	CreateBook(title string, year int, isbn string, authorID int) (int, error)
-	UpdateBook(bookID int, title string, year int, isbn string) error
+	UpdateBook(book entity.Book) error
 	DeleteBook(bookID int) error
-	UpdateBookAndAuthor(bookID int, newTitle string, newYear int, newISBN string, authorID int, newFirstName string, newLastName string, newBiography string, newBirthDate time.Time) error
+	UpdateBookAndAuthor(book entity.Book, author entity.Author) error
 }
 
 type repository struct {
@@ -29,9 +30,7 @@ type repository struct {
 }
 
 func NewRepository(db *sql.DB) Repository {
-	return &repository{
-		db: db,
-	}
+	return &repository{db: db}
 }
 
 func (r *repository) GetAllAuthors() ([]entity.Author, error) {
@@ -44,8 +43,12 @@ func (r *repository) GetAllAuthors() ([]entity.Author, error) {
 	var authors []entity.Author
 	for rows.Next() {
 		var author entity.Author
-		if err := rows.Scan(&author.ID, &author.FirstName, &author.LastName, &author.Biography, &author.BirthDate); err != nil {
+		var birthDate sql.NullTime
+		if err := rows.Scan(&author.ID, &author.FirstName, &author.LastName, &author.Biography, &birthDate); err != nil {
 			return nil, errors.MapErrorToHTTP(err)
+		}
+		if birthDate.Valid {
+			author.BirthDate = &entity.Date{Time: birthDate.Time}
 		}
 		authors = append(authors, author)
 	}
@@ -57,28 +60,41 @@ func (r *repository) GetAllAuthors() ([]entity.Author, error) {
 
 func (r *repository) GetAuthor(authorID int) (entity.Author, error) {
 	var author entity.Author
-	err := r.db.QueryRow("SELECT id, first_name, last_name, biography, birth_date FROM authors WHERE id = $1", authorID).Scan(&author.ID, &author.FirstName, &author.LastName, &author.Biography, &author.BirthDate)
+	var birthDate sql.NullTime
+	err := r.db.QueryRow("SELECT id, first_name, last_name, biography, birth_date FROM authors WHERE id = $1", authorID).Scan(&author.ID, &author.FirstName, &author.LastName, &author.Biography, &birthDate)
 	if err != nil {
 		if err == sql.ErrNoRows {
 			return author, errors.ErrNotFound
 		}
 		return author, errors.ErrDB
 	}
+	if birthDate.Valid {
+		author.BirthDate = &entity.Date{Time: birthDate.Time}
+	}
 	return author, nil
 }
 
-func (r *repository) CreateAuthor(firstName, lastName, biography string, birthDate time.Time) (int, error) {
+func (r *repository) CreateAuthor(firstName, lastName, biography string, birthDate entity.Date) (int, error) {
 	var authorID int
-	err := r.db.QueryRow("INSERT INTO authors (first_name, last_name, biography, birth_date) VALUES ($1, $2, $3, $4) RETURNING id", firstName, lastName, biography, birthDate).Scan(&authorID)
-	log.Printf("error=%+v", err)
+	err := r.db.QueryRow("INSERT INTO authors (first_name, last_name, biography, birth_date) VALUES ($1, $2, $3, $4) RETURNING id", firstName, lastName, biography, birthDate.Time).Scan(&authorID)
 	if err != nil {
 		return 0, errors.MapErrorToHTTP(err)
 	}
 	return authorID, nil
 }
 
-func (r *repository) UpdateAuthor(authorID int, firstName, lastName, biography string, birthDate time.Time) error {
-	result, err := r.db.Exec("UPDATE authors SET first_name = $1, last_name = $2, biography = $3, birth_date = $4 WHERE id = $5", firstName, lastName, biography, birthDate, authorID)
+func (r *repository) UpdateAuthor(author entity.Author) error {
+	authorFields := extractAuthorFields(author)
+
+	if len(authorFields) == 0 {
+		return nil // Нет полей для обновления
+	}
+
+	query, args := createUpdateQuery("authors", authorFields)
+	query += " WHERE id = $" + strconv.Itoa(len(args)+1)
+	args = append(args, author.ID)
+
+	result, err := r.db.Exec(query, args...)
 	rows, _ := result.RowsAffected()
 	if err != nil {
 		return errors.MapErrorToHTTP(err)
@@ -95,7 +111,7 @@ func (r *repository) DeleteAuthor(authorID int) error {
 	if err != nil {
 		return errors.MapErrorToHTTP(err)
 	} else if rows == 0 {
-		return errors.NewHTTPError(http.StatusNotFound, "author not found", "UpdateAuthor")
+		return errors.NewHTTPError(http.StatusNotFound, "author not found", "DeleteAuthor")
 	}
 
 	books, err := r.GetBooksByAuthor(authorID)
@@ -107,7 +123,7 @@ func (r *repository) DeleteAuthor(authorID int) error {
 			return errors.MapErrorToHTTP(err)
 		}
 	}
-	return err
+	return nil
 }
 
 func (r *repository) GetAllBooks() ([]entity.Book, error) {
@@ -173,8 +189,18 @@ func (r *repository) CreateBook(title string, year int, isbn string, authorID in
 	return bookID, nil
 }
 
-func (r *repository) UpdateBook(bookID int, title string, year int, isbn string) error {
-	result, err := r.db.Exec("UPDATE books SET title = $1, year = $2, isbn = $3 WHERE id = $4", title, year, isbn, bookID)
+func (r *repository) UpdateBook(book entity.Book) error {
+	bookFields := extractBookFields(book)
+
+	if len(bookFields) == 0 {
+		return nil // Нет полей для обновления
+	}
+
+	query, args := createUpdateQuery("books", bookFields)
+	query += " WHERE id = $" + strconv.Itoa(len(args)+1)
+	args = append(args, book.ID)
+
+	result, err := r.db.Exec(query, args...)
 	rows, _ := result.RowsAffected()
 	if err != nil {
 		return errors.MapErrorToHTTP(err)
@@ -195,39 +221,97 @@ func (r *repository) DeleteBook(bookID int) error {
 	return nil
 }
 
-func (r *repository) UpdateBookAndAuthor(bookID int, newTitle string, newYear int, newISBN string, authorID int, newFirstName string, newLastName string, newBiography string, newBirthDate time.Time) error {
+func (r *repository) UpdateBookAndAuthor(book entity.Book, author entity.Author) error {
 	tx, err := r.db.Begin()
 	if err != nil {
 		return errors.MapErrorToHTTP(err)
 	}
-
 	defer func() {
 		if err != nil {
 			tx.Rollback()
-			errors.MapErrorToHTTP(err)
 		} else {
 			err = tx.Commit()
 		}
 	}()
 
-	var result sql.Result
-	var rows int64
+	// Обновление книги
+	bookFields := extractBookFields(book)
 
-	result, err = tx.Exec("UPDATE books SET title = $1, year = $2, isbn = $3 WHERE id = $4", newTitle, newYear, newISBN, bookID)
-	rows, _ = result.RowsAffected()
-	if err != nil {
-		return errors.MapErrorToHTTP(err)
-	} else if rows == 0 {
-		return errors.NewHTTPError(http.StatusNotFound, "book not found", "UpdateBookAndAuthor")
+	if len(bookFields) > 0 {
+		bookQuery, bookArgs := createUpdateQuery("books", bookFields)
+		bookQuery += " WHERE id = $" + strconv.Itoa(len(bookArgs)+1)
+		bookArgs = append(bookArgs, book.ID)
+
+		if _, err = tx.Exec(bookQuery, bookArgs...); err != nil {
+			return errors.MapErrorToHTTP(err)
+		}
 	}
 
-	result, err = tx.Exec("UPDATE authors SET first_name = $1, last_name = $2, biography = $3, birth_date = $4 WHERE id = $5", newFirstName, newLastName, newBiography, newBirthDate.Format("2006-01-02"), authorID)
-	rows, _ = result.RowsAffected()
-	if err != nil {
-		return errors.MapErrorToHTTP(err)
-	} else if rows == 0 {
-		return errors.NewHTTPError(http.StatusNotFound, "author not found", "UpdateBookAndAuthor")
+	// Обновление автора
+	authorFields := extractAuthorFields(author)
+
+	if len(authorFields) > 0 {
+		authorQuery, authorArgs := createUpdateQuery("authors", authorFields)
+		authorQuery += " WHERE id = $" + strconv.Itoa(len(authorArgs)+1)
+		authorArgs = append(authorArgs, author.ID)
+
+		if _, err = tx.Exec(authorQuery, authorArgs...); err != nil {
+			return errors.MapErrorToHTTP(err)
+		}
 	}
 
 	return nil
+}
+
+// Приватная вспомогательная функция для создания SQL-запроса обновления
+func createUpdateQuery(tableName string, fields map[string]interface{}) (string, []interface{}) {
+	setClauses := []string{}
+	args := []interface{}{}
+	argIdx := 1
+
+	for field, value := range fields {
+		setClauses = append(setClauses, field+" = $"+strconv.Itoa(argIdx))
+		args = append(args, value)
+		argIdx++
+	}
+
+	query := "UPDATE " + tableName + " SET " + strings.Join(setClauses, ", ")
+
+	return query, args
+}
+
+// Приватная вспомогательная функция для извлечения полей книги
+func extractBookFields(book entity.Book) map[string]interface{} {
+	fields := map[string]interface{}{}
+	if book.Title != nil {
+		fields["title"] = *book.Title
+	}
+	if book.AuthorID != nil {
+		fields["author_id"] = *book.AuthorID
+	}
+	if book.Year != nil {
+		fields["year"] = *book.Year
+	}
+	if book.ISBN != nil {
+		fields["isbn"] = *book.ISBN
+	}
+	return fields
+}
+
+// Приватная вспомогательная функция для извлечения полей автора
+func extractAuthorFields(author entity.Author) map[string]interface{} {
+	fields := map[string]interface{}{}
+	if author.FirstName != nil {
+		fields["first_name"] = *author.FirstName
+	}
+	if author.LastName != nil {
+		fields["last_name"] = *author.LastName
+	}
+	if author.Biography != nil {
+		fields["biography"] = *author.Biography
+	}
+	if author.BirthDate != nil {
+		fields["birth_date"] = author.BirthDate.Time.Format("2006-01-02")
+	}
+	return fields
 }

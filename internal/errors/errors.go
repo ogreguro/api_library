@@ -6,9 +6,11 @@ import (
 )
 
 var (
-	ErrNotFound     = errors.New("not found")
-	ErrInvalidInput = errors.New("invalid input")
-	ErrDB           = errors.New("database error")
+	ErrAuthorNotFound = errors.New("author not found")
+	ErrBookNotFound   = errors.New("book not found")
+	ErrNotFound       = errors.New("book not found")
+	ErrInvalidInput   = errors.New("invalid input")
+	ErrDB             = errors.New("database error")
 )
 
 type HTTPError struct {
@@ -28,6 +30,10 @@ func (e *HTTPError) Error() string {
 func MapErrorToHTTP(err error) *HTTPError {
 	switch err {
 	case ErrNotFound:
+		return NewHTTPError(http.StatusNotFound, err.Error(), "")
+	case ErrAuthorNotFound:
+		return NewHTTPError(http.StatusNotFound, err.Error(), "")
+	case ErrBookNotFound:
 		return NewHTTPError(http.StatusNotFound, err.Error(), "")
 	case ErrInvalidInput:
 		return NewHTTPError(http.StatusBadRequest, err.Error(), "")

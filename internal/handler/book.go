@@ -11,11 +11,11 @@ import (
 )
 
 type BookHandler struct {
-	bookService usecase.Service
+	service usecase.Service
 }
 
 func NewBookHandler(service usecase.Service) *BookHandler {
-	return &BookHandler{bookService: service}
+	return &BookHandler{service: service}
 }
 
 func (h *BookHandler) HandleBooks(w http.ResponseWriter, r *http.Request) {
@@ -30,27 +30,63 @@ func (h *BookHandler) HandleBooks(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *BookHandler) HandleBook(w http.ResponseWriter, r *http.Request) {
-	urlPathSegments := strings.Split(r.URL.Path, "books/")
-	bookID, err := strconv.Atoi(urlPathSegments[len(urlPathSegments)-1])
-	if err != nil {
-		h.sendResponse(w, http.StatusBadRequest, "Invalid book ID")
+	urlPathSegments := strings.Split(r.URL.Path, "/")
+	if len(urlPathSegments) < 3 {
+		h.sendResponse(w, http.StatusBadRequest, "Invalid URL")
 		return
 	}
 
-	switch r.Method {
-	case http.MethodGet:
-		h.getBookByID(w, r, bookID)
-	case http.MethodPut:
-		h.updateBook(w, r, bookID)
-	case http.MethodDelete:
-		h.deleteBook(w, r, bookID)
-	default:
-		h.sendResponse(w, http.StatusMethodNotAllowed, "Method not supported")
+	id, err := strconv.Atoi(urlPathSegments[2])
+	if err != nil {
+		h.sendResponse(w, http.StatusBadRequest, "Invalid ID")
+		return
+	}
+
+	if len(urlPathSegments) == 3 {
+		switch r.Method {
+		case http.MethodGet:
+			h.getBookByID(w, r, id)
+		case http.MethodPut:
+			h.updateBook(w, r, id)
+		case http.MethodDelete:
+			h.deleteBook(w, r, id)
+		default:
+			h.sendResponse(w, http.StatusMethodNotAllowed, "Method not supported")
+		}
+	} else if len(urlPathSegments) == 5 && urlPathSegments[3] == "authors" {
+		authorID, err := strconv.Atoi(urlPathSegments[4])
+		if err != nil {
+			h.sendResponse(w, http.StatusBadRequest, "Invalid author ID")
+			return
+		}
+		h.handleBookAndAuthorUpdate(w, r, id, authorID)
+	} else {
+		h.sendResponse(w, http.StatusBadRequest, "Invalid URL")
 	}
 }
 
+func (h *BookHandler) handleBookAndAuthorUpdate(w http.ResponseWriter, r *http.Request, bookID, authorID int) {
+	var payload entity.BookAuthorPayload
+
+	decoder := json.NewDecoder(r.Body)
+	if err := decoder.Decode(&payload); err != nil {
+		h.sendResponse(w, http.StatusBadRequest, "Invalid request payload")
+		return
+	}
+
+	payload.Book.ID = bookID
+	payload.Author.ID = authorID
+
+	if err := h.service.UpdateBookWithAuthor(payload.Book, payload.Author); err != nil {
+		h.sendResponse(w, http.StatusInternalServerError, fmt.Sprintf("Error updating book and author: %v", err))
+		return
+	}
+
+	h.sendResponse(w, http.StatusOK, "Book and author updated successfully")
+}
+
 func (h *BookHandler) getBooks(w http.ResponseWriter, r *http.Request) {
-	books, err := h.bookService.GetAllBooks()
+	books, err := h.service.GetAllBooks()
 	if err != nil {
 		h.sendResponse(w, http.StatusInternalServerError, fmt.Sprintf("Error retrieving books: %v", err))
 		return
@@ -60,7 +96,7 @@ func (h *BookHandler) getBooks(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *BookHandler) getBookByID(w http.ResponseWriter, r *http.Request, bookID int) {
-	book, err := h.bookService.GetBook(bookID)
+	book, err := h.service.GetBook(bookID)
 	if err != nil {
 		h.sendResponse(w, http.StatusNotFound, fmt.Sprintf("Book with ID %d not found", bookID))
 		return
@@ -72,11 +108,11 @@ func (h *BookHandler) getBookByID(w http.ResponseWriter, r *http.Request, bookID
 func (h *BookHandler) createBook(w http.ResponseWriter, r *http.Request) {
 	var book entity.Book
 	if err := json.NewDecoder(r.Body).Decode(&book); err != nil {
-		h.sendResponse(w, http.StatusBadRequest, "Invalid data format")
+		h.sendResponse(w, http.StatusBadRequest, fmt.Sprintf("Invalid data format: %v", err))
 		return
 	}
 
-	bookID, err := h.bookService.CreateBook(book.Title, book.Year, book.ISBN, book.AuthorID)
+	bookID, err := h.service.CreateBook(*book.Title, *book.Year, *book.ISBN, *book.AuthorID)
 	if err != nil {
 		h.sendResponse(w, http.StatusInternalServerError, fmt.Sprintf("Error creating book: %v", err))
 		return
@@ -89,29 +125,29 @@ func (h *BookHandler) createBook(w http.ResponseWriter, r *http.Request) {
 func (h *BookHandler) updateBook(w http.ResponseWriter, r *http.Request, bookID int) {
 	var book entity.Book
 	if err := json.NewDecoder(r.Body).Decode(&book); err != nil {
-		h.sendResponse(w, http.StatusBadRequest, "Invalid data format")
+		h.sendResponse(w, http.StatusBadRequest, fmt.Sprintf("Invalid data format: %v", err))
 		return
 	}
 
-	err := h.bookService.UpdateBook(bookID, book.Title, book.Year, book.ISBN, book.AuthorID)
-	if err != nil {
+	book.ID = bookID
+
+	if err := h.service.UpdateBook(book); err != nil {
 		h.sendResponse(w, http.StatusInternalServerError, fmt.Sprintf("Error updating book: %v", err))
 		return
 	}
 
 	w.WriteHeader(http.StatusOK)
-	fmt.Fprintf(w, "Book with ID %d updated")
+	fmt.Fprintf(w, "Book with ID %d updated successfully", bookID)
 }
 
 func (h *BookHandler) deleteBook(w http.ResponseWriter, r *http.Request, bookID int) {
-	err := h.bookService.DeleteBook(bookID)
-	if err != nil {
+	if err := h.service.DeleteBook(bookID); err != nil {
 		h.sendResponse(w, http.StatusInternalServerError, fmt.Sprintf("Error deleting book: %v", err))
 		return
 	}
 
 	w.WriteHeader(http.StatusOK)
-	fmt.Fprintf(w, "Book with ID %d deleted")
+	fmt.Fprintf(w, "Book with ID %d deleted successfully", bookID)
 }
 
 func (h *BookHandler) sendResponse(w http.ResponseWriter, statusCode int, message string) {

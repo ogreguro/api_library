@@ -79,7 +79,7 @@ func (h *AuthorHandler) createAuthor(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	authorID, err := h.service.CreateAuthor(author.FirstName, author.LastName, author.Biography, author.BirthDate.Time)
+	authorID, err := h.service.CreateAuthor(*author.FirstName, *author.LastName, *author.Biography, author.BirthDate.Time)
 	if err != nil {
 		h.sendHTTPError(w, errors.MapErrorToHTTP(err))
 		return
@@ -96,7 +96,9 @@ func (h *AuthorHandler) updateAuthor(w http.ResponseWriter, r *http.Request, aut
 		return
 	}
 
-	err := h.service.UpdateAuthor(authorID, author.FirstName, author.LastName, author.Biography, author.BirthDate.Time)
+	author.ID = authorID
+
+	err := h.service.UpdateAuthor(author)
 	if err != nil {
 		h.sendHTTPError(w, errors.MapErrorToHTTP(err))
 		return

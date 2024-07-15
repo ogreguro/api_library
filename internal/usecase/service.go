@@ -10,15 +10,16 @@ type Service interface {
 	GetAllAuthors() ([]entity.Author, error)
 	GetAuthor(id int) (entity.Author, error)
 	CreateAuthor(firstName, lastName, biography string, birthDate time.Time) (int, error)
-	UpdateAuthor(id int, firstName, lastName, biography string, birthDate time.Time) error
+	UpdateAuthor(author entity.Author) error
 	DeleteAuthor(id int) error
 
 	GetAllBooks() ([]entity.Book, error)
 	GetBook(id int) (entity.Book, error)
 	CreateBook(title string, year int, isbn string, authorID int) (int, error)
-	UpdateBook(id int, title string, year int, isbn string, authorID int) error
+	UpdateBook(book entity.Book) error
 	DeleteBook(id int) error
-	UpdateBookWithAuthor(bookID int, newTitle string, newYear int, newISBN string, authorID int, newFirstName string, newLastName string, newBiography string, newBirthDate time.Time) error
+	GetBooksByAuthor(id int) ([]entity.Book, error)
+	UpdateBookWithAuthor(book entity.Book, author entity.Author) error
 }
 
 type service struct {
@@ -38,11 +39,11 @@ func (s *service) GetAuthor(id int) (entity.Author, error) {
 }
 
 func (s *service) CreateAuthor(firstName, lastName, biography string, birthDate time.Time) (int, error) {
-	return s.repo.CreateAuthor(firstName, lastName, biography, birthDate)
+	return s.repo.CreateAuthor(firstName, lastName, biography, entity.Date{Time: birthDate})
 }
 
-func (s *service) UpdateAuthor(id int, firstName, lastName, biography string, birthDate time.Time) error {
-	return s.repo.UpdateAuthor(id, firstName, lastName, biography, birthDate)
+func (s *service) UpdateAuthor(author entity.Author) error {
+	return s.repo.UpdateAuthor(author)
 }
 
 func (s *service) DeleteAuthor(id int) error {
@@ -61,8 +62,8 @@ func (s *service) CreateBook(title string, year int, isbn string, authorID int) 
 	return s.repo.CreateBook(title, year, isbn, authorID)
 }
 
-func (s *service) UpdateBook(id int, title string, year int, isbn string, authorID int) error {
-	return s.repo.UpdateBook(id, title, year, isbn)
+func (s *service) UpdateBook(book entity.Book) error {
+	return s.repo.UpdateBook(book)
 }
 
 func (s *service) DeleteBook(id int) error {
@@ -73,6 +74,6 @@ func (s *service) GetBooksByAuthor(id int) ([]entity.Book, error) {
 	return s.repo.GetBooksByAuthor(id)
 }
 
-func (s *service) UpdateBookWithAuthor(bookID int, newTitle string, newYear int, newISBN string, authorID int, newFirstName string, newLastName string, newBiography string, newBirthDate time.Time) error {
-	return s.repo.UpdateBookAndAuthor(bookID, newTitle, newYear, newISBN, authorID, newFirstName, newLastName, newBiography, newBirthDate)
+func (s *service) UpdateBookWithAuthor(book entity.Book, author entity.Author) error {
+	return s.repo.UpdateBookAndAuthor(book, author)
 }
