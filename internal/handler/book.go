@@ -32,6 +32,24 @@ func (h *BookHandler) HandleBooks(w http.ResponseWriter, r *http.Request) {
 
 func (h *BookHandler) HandleBook(w http.ResponseWriter, r *http.Request) {
 	urlPathSegments := strings.Split(strings.Trim(r.URL.Path, "/"), "/")
+
+	if len(urlPathSegments) == 4 && urlPathSegments[2] == "authors" {
+		bookID, err := strconv.Atoi(urlPathSegments[1])
+		if err != nil {
+			code, msg := errors.MapErrorToHTTP(errors.NewInvalidIDError(err))
+			h.sendHTTPError(w, code, msg)
+			return
+		}
+		authorID, err := strconv.Atoi(urlPathSegments[3])
+		if err != nil {
+			code, msg := errors.MapErrorToHTTP(errors.NewInvalidIDError(err))
+			h.sendHTTPError(w, code, msg)
+			return
+		}
+		h.handleBookAndAuthorUpdate(w, r, bookID, authorID)
+		return
+	}
+
 	if len(urlPathSegments) != 2 {
 		code, msg := errors.MapErrorToHTTP(errors.NewEndpointNotFoundError())
 		h.sendHTTPError(w, code, msg)
@@ -45,28 +63,15 @@ func (h *BookHandler) HandleBook(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if len(urlPathSegments) == 2 {
-		switch r.Method {
-		case http.MethodGet:
-			h.getBookByID(w, r, id)
-		case http.MethodPut:
-			h.updateBook(w, r, id)
-		case http.MethodDelete:
-			h.deleteBook(w, r, id)
-		default:
-			code, msg := errors.MapErrorToHTTP(errors.NewMethodNotAllowedError())
-			h.sendHTTPError(w, code, msg)
-		}
-	} else if len(urlPathSegments) == 4 && urlPathSegments[2] == "authors" {
-		authorID, err := strconv.Atoi(urlPathSegments[3])
-		if err != nil {
-			code, msg := errors.MapErrorToHTTP(errors.NewInvalidIDError(err))
-			h.sendHTTPError(w, code, msg)
-			return
-		}
-		h.handleBookAndAuthorUpdate(w, r, id, authorID)
-	} else {
-		code, msg := errors.MapErrorToHTTP(errors.NewEndpointNotFoundError())
+	switch r.Method {
+	case http.MethodGet:
+		h.getBookByID(w, r, id)
+	case http.MethodPut:
+		h.updateBook(w, r, id)
+	case http.MethodDelete:
+		h.deleteBook(w, r, id)
+	default:
+		code, msg := errors.MapErrorToHTTP(errors.NewMethodNotAllowedError())
 		h.sendHTTPError(w, code, msg)
 	}
 }
