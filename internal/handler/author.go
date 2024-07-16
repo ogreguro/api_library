@@ -32,12 +32,12 @@ func (h *AuthorHandler) HandleAuthors(w http.ResponseWriter, r *http.Request) {
 
 func (h *AuthorHandler) HandleAuthor(w http.ResponseWriter, r *http.Request) {
 	urlPathSegments := strings.Split(r.URL.Path, "/")
-	if len(urlPathSegments) != 2 {
+	if len(urlPathSegments) != 3 {
 		code, msg := errors.MapErrorToHTTP(errors.NewEndpointNotFoundError())
 		h.sendHTTPError(w, code, msg)
 		return
 	}
-	authorID, err := strconv.Atoi(urlPathSegments[1])
+	authorID, err := strconv.Atoi(urlPathSegments[2])
 	if err != nil {
 		code, msg := errors.MapErrorToHTTP(errors.NewInvalidIDError(err))
 		h.sendHTTPError(w, code, msg)

@@ -9,8 +9,8 @@ import (
 )
 
 var (
-	isbn10Regex = regexp.MustCompile(`^(?:\d-?){10}$`)
-	isbn13Regex = regexp.MustCompile(`^(?:\d-?){13}$`)
+	isbn10Regex = regexp.MustCompile(`^\d{9}[0-9X]$`)
+	isbn13Regex = regexp.MustCompile(`^\d{13}$`)
 )
 
 type Service interface {
@@ -121,9 +121,10 @@ func (s *service) validateBook(book entity.Book) []string {
 		validationErrors = append(validationErrors, "author_id cannot be empty")
 	}
 	if book.ISBN != nil {
-		if *book.ISBN == "" {
+		strippedISBN := removeHyphens(*book.ISBN)
+		if strippedISBN == "" {
 			validationErrors = append(validationErrors, "ISBN cannot be empty")
-		} else if !isbn10Regex.MatchString(*book.ISBN) && !isbn13Regex.MatchString(*book.ISBN) {
+		} else if !isbn10Regex.MatchString(strippedISBN) && !isbn13Regex.MatchString(strippedISBN) {
 			validationErrors = append(validationErrors, "ISBN format is invalid")
 		}
 	}
@@ -148,4 +149,8 @@ func (s *service) validateAuthor(author entity.Author) []string {
 	}
 
 	return validationErrors
+}
+
+func removeHyphens(input string) string {
+	return regexp.MustCompile(`-`).ReplaceAllString(input, "")
 }
