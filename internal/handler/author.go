@@ -5,7 +5,6 @@ import (
 	"api_library/internal/errors"
 	"api_library/internal/usecase"
 	"encoding/json"
-	"fmt"
 	"net/http"
 	"strconv"
 	"strings"
@@ -26,7 +25,7 @@ func (h *AuthorHandler) HandleAuthors(w http.ResponseWriter, r *http.Request) {
 	case http.MethodPost:
 		h.createAuthor(w, r)
 	default:
-		h.sendHTTPError(w, errors.NewHTTPError(http.StatusMethodNotAllowed, "method not supported", "HandleAuthors"))
+		h.sendHTTPError(w, errors.NewHTTPMethodError("Method not supported", nil))
 	}
 }
 
@@ -34,7 +33,7 @@ func (h *AuthorHandler) HandleAuthor(w http.ResponseWriter, r *http.Request) {
 	urlPathSegments := strings.Split(r.URL.Path, "authors/")
 	authorID, err := strconv.Atoi(urlPathSegments[len(urlPathSegments)-1])
 	if err != nil {
-		h.sendHTTPError(w, errors.NewHTTPError(http.StatusBadRequest, "invalid author ID", "HandleAuthor"))
+		h.sendHTTPError(w, errors.NewValidationError("Invalid author ID", err))
 		return
 	}
 
@@ -46,7 +45,7 @@ func (h *AuthorHandler) HandleAuthor(w http.ResponseWriter, r *http.Request) {
 	case http.MethodDelete:
 		h.deleteAuthor(w, r, authorID)
 	default:
-		h.sendHTTPError(w, errors.NewHTTPError(http.StatusMethodNotAllowed, "method not supported", "HandleAuthor"))
+		h.sendHTTPError(w, errors.NewHTTPMethodError("Method not supported", nil))
 	}
 }
 
@@ -56,26 +55,22 @@ func (h *AuthorHandler) getAuthors(w http.ResponseWriter, r *http.Request) {
 		h.sendHTTPError(w, errors.MapErrorToHTTP(err))
 		return
 	}
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(authors)
-	w.WriteHeader(http.StatusOK)
+	h.sendJSONResponse(w, http.StatusOK, authors)
 }
 
 func (h *AuthorHandler) getAuthorByID(w http.ResponseWriter, r *http.Request, authorID int) {
 	author, err := h.service.GetAuthor(authorID)
 	if err != nil {
-		h.sendHTTPError(w, errors.MapErrorToHTTP(err))
+		h.sendHTTPError(w, errors.NewNotFoundError("Author", authorID, err))
 		return
 	}
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(author)
-	w.WriteHeader(http.StatusOK)
+	h.sendJSONResponse(w, http.StatusOK, author)
 }
 
 func (h *AuthorHandler) createAuthor(w http.ResponseWriter, r *http.Request) {
 	var author entity.Author
 	if err := json.NewDecoder(r.Body).Decode(&author); err != nil {
-		h.sendHTTPError(w, errors.NewHTTPError(http.StatusBadRequest, err.Error(), "createAuthor"))
+		h.sendHTTPError(w, errors.NewValidationError("Invalid request payload", err))
 		return
 	}
 
@@ -85,14 +80,13 @@ func (h *AuthorHandler) createAuthor(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	w.WriteHeader(http.StatusCreated)
-	fmt.Fprintf(w, "Author created with ID: %d", authorID)
+	h.sendJSONResponse(w, http.StatusCreated, map[string]int{"author_id": authorID})
 }
 
 func (h *AuthorHandler) updateAuthor(w http.ResponseWriter, r *http.Request, authorID int) {
 	var author entity.Author
 	if err := json.NewDecoder(r.Body).Decode(&author); err != nil {
-		h.sendHTTPError(w, errors.NewHTTPError(http.StatusBadRequest, err.Error(), "updateAuthor"))
+		h.sendHTTPError(w, errors.NewValidationError("Invalid request payload", err))
 		return
 	}
 
@@ -104,8 +98,7 @@ func (h *AuthorHandler) updateAuthor(w http.ResponseWriter, r *http.Request, aut
 		return
 	}
 
-	w.WriteHeader(http.StatusOK)
-	fmt.Fprintf(w, "Author updated with ID: %d", authorID)
+	h.sendJSONResponse(w, http.StatusOK, map[string]int{"author_id": authorID})
 }
 
 func (h *AuthorHandler) deleteAuthor(w http.ResponseWriter, r *http.Request, authorID int) {
@@ -115,12 +108,17 @@ func (h *AuthorHandler) deleteAuthor(w http.ResponseWriter, r *http.Request, aut
 		return
 	}
 
-	w.WriteHeader(http.StatusOK)
-	fmt.Fprintf(w, "Author deleted with ID: %d", authorID)
+	h.sendJSONResponse(w, http.StatusOK, map[string]int{"author_id": authorID})
 }
 
-func (h *AuthorHandler) sendHTTPError(w http.ResponseWriter, httpErr *errors.HTTPError) {
+func (h *AuthorHandler) sendHTTPError(w http.ResponseWriter, httpErr *errors.AppError) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(httpErr.Code)
-	json.NewEncoder(w).Encode(httpErr)
+	json.NewEncoder(w).Encode(errors.CreateErrorResponse(httpErr))
+}
+
+func (h *AuthorHandler) sendJSONResponse(w http.ResponseWriter, statusCode int, data interface{}) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(statusCode)
+	json.NewEncoder(w).Encode(data)
 }

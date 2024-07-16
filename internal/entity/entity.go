@@ -22,13 +22,6 @@ func (d *Date) UnmarshalJSON(b []byte) error {
 	return nil
 }
 
-/*
-// Переопределяет поведение по умолчанию для сериализации
-func (d Date) MarshalJSON() (string, error) {
-	return string(d.Time.Format("2006-01-02")), nil
-}
-*/
-
 func (d Date) MarshalJSON() ([]byte, error) {
 	return []byte(fmt.Sprintf("\"%s\"", d.Time.Format("2006-01-02"))), nil
 }
