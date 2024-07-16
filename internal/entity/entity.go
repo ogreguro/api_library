@@ -9,7 +9,6 @@ type Date struct {
 	time.Time
 }
 
-// Переопределяет поведение по умолчанию для десериализации
 func (d *Date) UnmarshalJSON(b []byte) error {
 	str := string(b)
 	str = str[1 : len(str)-1] // убираем кавычки

@@ -32,8 +32,8 @@ func (h *BookHandler) HandleBooks(w http.ResponseWriter, r *http.Request) {
 
 func (h *BookHandler) HandleBook(w http.ResponseWriter, r *http.Request) {
 	urlPathSegments := strings.Split(r.URL.Path, "/")
-	if len(urlPathSegments) < 3 {
-		code, msg := errors.MapErrorToHTTP(errors.NewInvalidIDError(nil))
+	if len(urlPathSegments) != 3 {
+		code, msg := errors.MapErrorToHTTP(errors.NewEndpointNotFoundError())
 		h.sendHTTPError(w, code, msg)
 		return
 	}
@@ -45,28 +45,15 @@ func (h *BookHandler) HandleBook(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if len(urlPathSegments) == 3 {
-		switch r.Method {
-		case http.MethodGet:
-			h.getBookByID(w, r, id)
-		case http.MethodPut:
-			h.updateBook(w, r, id)
-		case http.MethodDelete:
-			h.deleteBook(w, r, id)
-		default:
-			code, msg := errors.MapErrorToHTTP(errors.NewMethodNotAllowedError())
-			h.sendHTTPError(w, code, msg)
-		}
-	} else if len(urlPathSegments) == 5 && urlPathSegments[3] == "authors" {
-		authorID, err := strconv.Atoi(urlPathSegments[4])
-		if err != nil {
-			code, msg := errors.MapErrorToHTTP(errors.NewInvalidIDError(err))
-			h.sendHTTPError(w, code, msg)
-			return
-		}
-		h.handleBookAndAuthorUpdate(w, r, id, authorID)
-	} else {
-		code, msg := errors.MapErrorToHTTP(errors.NewInvalidIDError(nil))
+	switch r.Method {
+	case http.MethodGet:
+		h.getBookByID(w, r, id)
+	case http.MethodPut:
+		h.updateBook(w, r, id)
+	case http.MethodDelete:
+		h.deleteBook(w, r, id)
+	default:
+		code, msg := errors.MapErrorToHTTP(errors.NewMethodNotAllowedError())
 		h.sendHTTPError(w, code, msg)
 	}
 }
