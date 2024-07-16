@@ -70,8 +70,11 @@ func NewDBError(err error) *AppError {
 	return NewAppError(http.StatusInternalServerError, ErrDBError, err)
 }
 
-func NewResourceNotFoundError(resource string, id int) *AppError {
-	return NewAppError(http.StatusNotFound, fmt.Sprintf("%s with ID %d not found", resource, id), nil)
+func NewResourceNotFoundError(resource string, id *int) *AppError {
+	if id != nil {
+		return NewAppError(http.StatusNotFound, fmt.Sprintf("%s with ID %d not found", resource, *id), nil)
+	}
+	return NewAppError(http.StatusNotFound, fmt.Sprintf("%s not found", resource), nil)
 }
 
 func MapErrorToHTTP(err error) (int, string) {

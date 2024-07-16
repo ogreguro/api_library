@@ -31,22 +31,21 @@ func (h *BookHandler) HandleBooks(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *BookHandler) HandleBook(w http.ResponseWriter, r *http.Request) {
-	urlPathSegments := strings.Split(r.URL.Path, "/")
-
-	if len(urlPathSegments) < 3 {
+	urlPathSegments := strings.Split(strings.Trim(r.URL.Path, "/"), "/")
+	if len(urlPathSegments) != 2 {
 		code, msg := errors.MapErrorToHTTP(errors.NewEndpointNotFoundError())
 		h.sendHTTPError(w, code, msg)
 		return
 	}
 
-	id, err := strconv.Atoi(urlPathSegments[2])
+	id, err := strconv.Atoi(urlPathSegments[1])
 	if err != nil {
 		code, msg := errors.MapErrorToHTTP(errors.NewInvalidIDError(err))
 		h.sendHTTPError(w, code, msg)
 		return
 	}
 
-	if len(urlPathSegments) == 3 {
+	if len(urlPathSegments) == 2 {
 		switch r.Method {
 		case http.MethodGet:
 			h.getBookByID(w, r, id)
@@ -58,8 +57,8 @@ func (h *BookHandler) HandleBook(w http.ResponseWriter, r *http.Request) {
 			code, msg := errors.MapErrorToHTTP(errors.NewMethodNotAllowedError())
 			h.sendHTTPError(w, code, msg)
 		}
-	} else if len(urlPathSegments) == 5 && urlPathSegments[3] == "authors" {
-		authorID, err := strconv.Atoi(urlPathSegments[4])
+	} else if len(urlPathSegments) == 4 && urlPathSegments[2] == "authors" {
+		authorID, err := strconv.Atoi(urlPathSegments[3])
 		if err != nil {
 			code, msg := errors.MapErrorToHTTP(errors.NewInvalidIDError(err))
 			h.sendHTTPError(w, code, msg)
@@ -159,13 +158,18 @@ func (h *BookHandler) getBooks(w http.ResponseWriter, r *http.Request) {
 		h.sendHTTPError(w, code, msg)
 		return
 	}
+	if len(books) == 0 {
+		code, msg := errors.MapErrorToHTTP(errors.NewResourceNotFoundError("Books", nil))
+		h.sendHTTPError(w, code, msg)
+		return
+	}
 	h.sendJSONResponse(w, http.StatusOK, books)
 }
 
 func (h *BookHandler) getBookByID(w http.ResponseWriter, r *http.Request, bookID int) {
 	book, err := h.service.GetBook(bookID)
 	if err != nil {
-		code, msg := errors.MapErrorToHTTP(err)
+		code, msg := errors.MapErrorToHTTP(errors.NewResourceNotFoundError("Book", &bookID))
 		h.sendHTTPError(w, code, msg)
 		return
 	}

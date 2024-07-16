@@ -56,22 +56,6 @@ func (r *repository) GetAllAuthors() ([]entity.Author, error) {
 	return authors, nil
 }
 
-func (r *repository) GetAuthor(authorID int) (entity.Author, error) {
-	var author entity.Author
-	var birthDate sql.NullTime
-	err := r.db.QueryRow("SELECT id, first_name, last_name, biography, birth_date FROM authors WHERE id = $1", authorID).Scan(&author.ID, &author.FirstName, &author.LastName, &author.Biography, &birthDate)
-	if err != nil {
-		if err == sql.ErrNoRows {
-			return author, errors.NewResourceNotFoundError("Author", authorID)
-		}
-		return author, errors.NewDBError(err)
-	}
-	if birthDate.Valid {
-		author.BirthDate = &entity.Date{Time: birthDate.Time}
-	}
-	return author, nil
-}
-
 func (r *repository) CreateAuthor(firstName, lastName, biography string, birthDate entity.Date) (int, error) {
 	var authorID int
 	err := r.db.QueryRow("INSERT INTO authors (first_name, last_name, biography, birth_date) VALUES ($1, $2, $3, $4) RETURNING id", firstName, lastName, biography, birthDate.Time).Scan(&authorID)
@@ -97,7 +81,7 @@ func (r *repository) UpdateAuthor(author entity.Author) error {
 	if err != nil {
 		return errors.NewDBError(err)
 	} else if rows == 0 {
-		return errors.NewResourceNotFoundError("Author", author.ID)
+		return errors.NewResourceNotFoundError("Author", &author.ID)
 	}
 
 	return nil
@@ -109,7 +93,7 @@ func (r *repository) DeleteAuthor(authorID int) error {
 	if err != nil {
 		return errors.NewDBError(err)
 	} else if rows == 0 {
-		return errors.NewResourceNotFoundError("Author", authorID)
+		return errors.NewResourceNotFoundError("Author", &authorID)
 	}
 
 	books, err := r.GetBooksByAuthor(authorID)
@@ -166,12 +150,28 @@ func (r *repository) GetBooksByAuthor(authorID int) ([]entity.Book, error) {
 	return books, nil
 }
 
+func (r *repository) GetAuthor(authorID int) (entity.Author, error) {
+	var author entity.Author
+	var birthDate sql.NullTime
+	err := r.db.QueryRow("SELECT id, first_name, last_name, biography, birth_date FROM authors WHERE id = $1", authorID).Scan(&author.ID, &author.FirstName, &author.LastName, &author.Biography, &birthDate)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return author, errors.NewResourceNotFoundError("Author", &authorID)
+		}
+		return author, errors.NewDBError(err)
+	}
+	if birthDate.Valid {
+		author.BirthDate = &entity.Date{Time: birthDate.Time}
+	}
+	return author, nil
+}
+
 func (r *repository) GetBook(bookID int) (entity.Book, error) {
 	var book entity.Book
 	err := r.db.QueryRow("SELECT id, title, year, isbn, author_id FROM books WHERE id = $1", bookID).Scan(&book.ID, &book.Title, &book.Year, &book.ISBN, &book.AuthorID)
 	if err != nil {
 		if err == sql.ErrNoRows {
-			return book, errors.NewResourceNotFoundError("Book", bookID)
+			return book, errors.NewResourceNotFoundError("Book", &bookID)
 		}
 		return book, errors.NewDBError(err)
 	}
@@ -203,7 +203,7 @@ func (r *repository) UpdateBook(book entity.Book) error {
 	if err != nil {
 		return errors.NewDBError(err)
 	} else if rows == 0 {
-		return errors.NewResourceNotFoundError("Book", book.ID)
+		return errors.NewResourceNotFoundError("Book", &book.ID)
 	}
 	return nil
 }
@@ -214,7 +214,7 @@ func (r *repository) DeleteBook(bookID int) error {
 	if err != nil {
 		return errors.NewDBError(err)
 	} else if rows == 0 {
-		return errors.NewResourceNotFoundError("Book", bookID)
+		return errors.NewResourceNotFoundError("Book", &bookID)
 	}
 	return nil
 }

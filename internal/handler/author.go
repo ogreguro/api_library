@@ -31,13 +31,13 @@ func (h *AuthorHandler) HandleAuthors(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *AuthorHandler) HandleAuthor(w http.ResponseWriter, r *http.Request) {
-	urlPathSegments := strings.Split(r.URL.Path, "/")
-	if len(urlPathSegments) != 3 {
+	urlPathSegments := strings.Split(strings.Trim(r.URL.Path, "/"), "/")
+	if len(urlPathSegments) != 2 {
 		code, msg := errors.MapErrorToHTTP(errors.NewEndpointNotFoundError())
 		h.sendHTTPError(w, code, msg)
 		return
 	}
-	authorID, err := strconv.Atoi(urlPathSegments[2])
+	authorID, err := strconv.Atoi(urlPathSegments[1])
 	if err != nil {
 		code, msg := errors.MapErrorToHTTP(errors.NewInvalidIDError(err))
 		h.sendHTTPError(w, code, msg)
@@ -64,13 +64,18 @@ func (h *AuthorHandler) getAuthors(w http.ResponseWriter, r *http.Request) {
 		h.sendHTTPError(w, code, msg)
 		return
 	}
+	if len(authors) == 0 {
+		code, msg := errors.MapErrorToHTTP(errors.NewResourceNotFoundError("Authors", nil))
+		h.sendHTTPError(w, code, msg)
+		return
+	}
 	h.sendJSONResponse(w, http.StatusOK, authors)
 }
 
 func (h *AuthorHandler) getAuthorByID(w http.ResponseWriter, r *http.Request, authorID int) {
 	author, err := h.service.GetAuthor(authorID)
 	if err != nil {
-		code, msg := errors.MapErrorToHTTP(err)
+		code, msg := errors.MapErrorToHTTP(errors.NewResourceNotFoundError("Author", &authorID))
 		h.sendHTTPError(w, code, msg)
 		return
 	}
