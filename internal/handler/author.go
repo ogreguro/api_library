@@ -85,6 +85,13 @@ func (h *AuthorHandler) createAuthor(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	validationErrors := validateAuthorAttributes(author)
+	if len(validationErrors) > 0 {
+		code, msg := errors.MapErrorToHTTP(errors.NewValidationError(validationErrors))
+		h.sendHTTPError(w, code, msg)
+		return
+	}
+
 	authorID, err := h.service.CreateAuthor(*author.FirstName, *author.LastName, *author.Biography, author.BirthDate.Time)
 	if err != nil {
 		code, msg := errors.MapErrorToHTTP(err)
@@ -99,6 +106,13 @@ func (h *AuthorHandler) updateAuthor(w http.ResponseWriter, r *http.Request, aut
 	var author entity.Author
 	if err := json.NewDecoder(r.Body).Decode(&author); err != nil {
 		code, msg := errors.MapErrorToHTTP(errors.NewInvalidRequestPayloadError(err))
+		h.sendHTTPError(w, code, msg)
+		return
+	}
+
+	validationErrors := validateAuthorAttributes(author)
+	if len(validationErrors) > 0 {
+		code, msg := errors.MapErrorToHTTP(errors.NewValidationError(validationErrors))
 		h.sendHTTPError(w, code, msg)
 		return
 	}
@@ -124,6 +138,25 @@ func (h *AuthorHandler) deleteAuthor(w http.ResponseWriter, r *http.Request, aut
 	}
 
 	h.sendJSONResponse(w, http.StatusOK, map[string]int{"author_id": authorID})
+}
+
+func validateAuthorAttributes(author entity.Author) []string {
+	var validationErrors []string
+
+	if author.FirstName == nil || *author.FirstName == "" {
+		validationErrors = append(validationErrors, "first_name is required")
+	}
+	if author.LastName == nil || *author.LastName == "" {
+		validationErrors = append(validationErrors, "last_name is required")
+	}
+	if author.Biography == nil || *author.Biography == "" {
+		validationErrors = append(validationErrors, "biography is required")
+	}
+	if author.BirthDate == nil {
+		validationErrors = append(validationErrors, "birth_date is required")
+	}
+
+	return validationErrors
 }
 
 func (h *AuthorHandler) sendHTTPError(w http.ResponseWriter, code int, message string) {

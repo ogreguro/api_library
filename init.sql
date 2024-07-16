@@ -14,5 +14,5 @@ CREATE TABLE books (
                        title VARCHAR(255),
                        author_id INT,
                        year INT,
-                       isbn VARCHAR(13)
+                       isbn VARCHAR(18)
 );

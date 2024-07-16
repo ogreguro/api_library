@@ -9,8 +9,8 @@ import (
 )
 
 var (
-	isbn10Regex = regexp.MustCompile(`^\d-\d{6}-\d{2}-\d$`)
-	isbn13Regex = regexp.MustCompile(`^\d{3}-\d-\d{6}-\d{2}-\d$`)
+	isbn10Regex = regexp.MustCompile(`^(?:\d-?){10}$`)
+	isbn13Regex = regexp.MustCompile(`^(?:\d-?){13}$`)
 )
 
 type Service interface {
@@ -98,8 +98,8 @@ func (s *service) GetBooksByAuthor(id int) ([]entity.Book, error) {
 }
 
 func (s *service) UpdateBookWithAuthor(book entity.Book, author entity.Author) error {
-	bookValidationErrors := s.validateBookUpdateAttributes(book)
-	authorValidationErrors := s.validateAuthorUpdateAttributes(author)
+	bookValidationErrors := s.validateBook(book)
+	authorValidationErrors := s.validateAuthor(author)
 
 	if len(bookValidationErrors) > 0 && len(authorValidationErrors) > 0 {
 		return errors.NewValidationError(append(bookValidationErrors, authorValidationErrors...))
@@ -109,46 +109,6 @@ func (s *service) UpdateBookWithAuthor(book entity.Book, author entity.Author) e
 }
 
 func (s *service) validateBook(book entity.Book) []string {
-	var validationErrors []string
-
-	if book.Title == nil || *book.Title == "" {
-		validationErrors = append(validationErrors, "title is required")
-	}
-	if book.Year == nil {
-		validationErrors = append(validationErrors, "year is required")
-	}
-	if book.AuthorID == nil {
-		validationErrors = append(validationErrors, "author_id is required")
-	}
-	if book.ISBN == nil || *book.ISBN == "" {
-		validationErrors = append(validationErrors, "ISBN is required")
-	} else if !isbn10Regex.MatchString(*book.ISBN) && !isbn13Regex.MatchString(*book.ISBN) {
-		validationErrors = append(validationErrors, "ISBN format is invalid")
-	}
-
-	return validationErrors
-}
-
-func (s *service) validateAuthor(author entity.Author) []string {
-	var validationErrors []string
-
-	if author.FirstName == nil || *author.FirstName == "" {
-		validationErrors = append(validationErrors, "first_name is required")
-	}
-	if author.LastName == nil || *author.LastName == "" {
-		validationErrors = append(validationErrors, "last_name is required")
-	}
-	if author.Biography == nil || *author.Biography == "" {
-		validationErrors = append(validationErrors, "biography is required")
-	}
-	if author.BirthDate == nil {
-		validationErrors = append(validationErrors, "birth_date is required")
-	}
-
-	return validationErrors
-}
-
-func (s *service) validateBookUpdateAttributes(book entity.Book) []string {
 	var validationErrors []string
 
 	if book.Title != nil && *book.Title == "" {
@@ -171,7 +131,7 @@ func (s *service) validateBookUpdateAttributes(book entity.Book) []string {
 	return validationErrors
 }
 
-func (s *service) validateAuthorUpdateAttributes(author entity.Author) []string {
+func (s *service) validateAuthor(author entity.Author) []string {
 	var validationErrors []string
 
 	if author.FirstName != nil && *author.FirstName == "" {
