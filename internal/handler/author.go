@@ -25,7 +25,8 @@ func (h *AuthorHandler) HandleAuthors(w http.ResponseWriter, r *http.Request) {
 	case http.MethodPost:
 		h.createAuthor(w, r)
 	default:
-		h.sendHTTPError(w, errors.NewHTTPMethodError("Method not supported", nil))
+		code, msg := errors.MapErrorToHTTP(errors.NewMethodNotAllowedError())
+		h.sendHTTPError(w, code, msg)
 	}
 }
 
@@ -33,7 +34,8 @@ func (h *AuthorHandler) HandleAuthor(w http.ResponseWriter, r *http.Request) {
 	urlPathSegments := strings.Split(r.URL.Path, "authors/")
 	authorID, err := strconv.Atoi(urlPathSegments[len(urlPathSegments)-1])
 	if err != nil {
-		h.sendHTTPError(w, errors.NewValidationError("Invalid author ID", err))
+		code, msg := errors.MapErrorToHTTP(errors.NewInvalidIDError(err))
+		h.sendHTTPError(w, code, msg)
 		return
 	}
 
@@ -45,14 +47,16 @@ func (h *AuthorHandler) HandleAuthor(w http.ResponseWriter, r *http.Request) {
 	case http.MethodDelete:
 		h.deleteAuthor(w, r, authorID)
 	default:
-		h.sendHTTPError(w, errors.NewHTTPMethodError("Method not supported", nil))
+		code, msg := errors.MapErrorToHTTP(errors.NewMethodNotAllowedError())
+		h.sendHTTPError(w, code, msg)
 	}
 }
 
 func (h *AuthorHandler) getAuthors(w http.ResponseWriter, r *http.Request) {
 	authors, err := h.service.GetAllAuthors()
 	if err != nil {
-		h.sendHTTPError(w, errors.MapErrorToHTTP(err))
+		code, msg := errors.MapErrorToHTTP(err)
+		h.sendHTTPError(w, code, msg)
 		return
 	}
 	h.sendJSONResponse(w, http.StatusOK, authors)
@@ -61,7 +65,8 @@ func (h *AuthorHandler) getAuthors(w http.ResponseWriter, r *http.Request) {
 func (h *AuthorHandler) getAuthorByID(w http.ResponseWriter, r *http.Request, authorID int) {
 	author, err := h.service.GetAuthor(authorID)
 	if err != nil {
-		h.sendHTTPError(w, errors.NewNotFoundError("Author", authorID, err))
+		code, msg := errors.MapErrorToHTTP(err)
+		h.sendHTTPError(w, code, msg)
 		return
 	}
 	h.sendJSONResponse(w, http.StatusOK, author)
@@ -70,13 +75,15 @@ func (h *AuthorHandler) getAuthorByID(w http.ResponseWriter, r *http.Request, au
 func (h *AuthorHandler) createAuthor(w http.ResponseWriter, r *http.Request) {
 	var author entity.Author
 	if err := json.NewDecoder(r.Body).Decode(&author); err != nil {
-		h.sendHTTPError(w, errors.NewValidationError("Invalid request payload", err))
+		code, msg := errors.MapErrorToHTTP(errors.NewInvalidRequestPayloadError(err))
+		h.sendHTTPError(w, code, msg)
 		return
 	}
 
 	authorID, err := h.service.CreateAuthor(*author.FirstName, *author.LastName, *author.Biography, author.BirthDate.Time)
 	if err != nil {
-		h.sendHTTPError(w, errors.MapErrorToHTTP(err))
+		code, msg := errors.MapErrorToHTTP(err)
+		h.sendHTTPError(w, code, msg)
 		return
 	}
 
@@ -86,7 +93,8 @@ func (h *AuthorHandler) createAuthor(w http.ResponseWriter, r *http.Request) {
 func (h *AuthorHandler) updateAuthor(w http.ResponseWriter, r *http.Request, authorID int) {
 	var author entity.Author
 	if err := json.NewDecoder(r.Body).Decode(&author); err != nil {
-		h.sendHTTPError(w, errors.NewValidationError("Invalid request payload", err))
+		code, msg := errors.MapErrorToHTTP(errors.NewInvalidRequestPayloadError(err))
+		h.sendHTTPError(w, code, msg)
 		return
 	}
 
@@ -94,7 +102,8 @@ func (h *AuthorHandler) updateAuthor(w http.ResponseWriter, r *http.Request, aut
 
 	err := h.service.UpdateAuthor(author)
 	if err != nil {
-		h.sendHTTPError(w, errors.MapErrorToHTTP(err))
+		code, msg := errors.MapErrorToHTTP(err)
+		h.sendHTTPError(w, code, msg)
 		return
 	}
 
@@ -104,17 +113,18 @@ func (h *AuthorHandler) updateAuthor(w http.ResponseWriter, r *http.Request, aut
 func (h *AuthorHandler) deleteAuthor(w http.ResponseWriter, r *http.Request, authorID int) {
 	err := h.service.DeleteAuthor(authorID)
 	if err != nil {
-		h.sendHTTPError(w, errors.MapErrorToHTTP(err))
+		code, msg := errors.MapErrorToHTTP(err)
+		h.sendHTTPError(w, code, msg)
 		return
 	}
 
 	h.sendJSONResponse(w, http.StatusOK, map[string]int{"author_id": authorID})
 }
 
-func (h *AuthorHandler) sendHTTPError(w http.ResponseWriter, httpErr *errors.AppError) {
+func (h *AuthorHandler) sendHTTPError(w http.ResponseWriter, code int, message string) {
 	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(httpErr.Code)
-	json.NewEncoder(w).Encode(errors.CreateErrorResponse(httpErr))
+	w.WriteHeader(code)
+	json.NewEncoder(w).Encode(map[string]interface{}{"error": message, "code": code})
 }
 
 func (h *AuthorHandler) sendJSONResponse(w http.ResponseWriter, statusCode int, data interface{}) {

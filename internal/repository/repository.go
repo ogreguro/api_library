@@ -4,12 +4,10 @@ import (
 	"api_library/internal/entity"
 	"api_library/internal/errors"
 	"database/sql"
-	"net/http"
 	"strconv"
 	"strings"
 )
 
-// Объявление интерфейса Repository
 type Repository interface {
 	GetAllAuthors() ([]entity.Author, error)
 	GetAuthor(authorID int) (entity.Author, error)
@@ -36,7 +34,7 @@ func NewRepository(db *sql.DB) Repository {
 func (r *repository) GetAllAuthors() ([]entity.Author, error) {
 	rows, err := r.db.Query("SELECT id, first_name, last_name, biography, birth_date FROM authors")
 	if err != nil {
-		return nil, errors.NewAppError(http.StatusInternalServerError, "Error retrieving authors", err)
+		return nil, errors.NewDBError(err)
 	}
 	defer rows.Close()
 
@@ -45,7 +43,7 @@ func (r *repository) GetAllAuthors() ([]entity.Author, error) {
 		var author entity.Author
 		var birthDate sql.NullTime
 		if err := rows.Scan(&author.ID, &author.FirstName, &author.LastName, &author.Biography, &birthDate); err != nil {
-			return nil, errors.NewAppError(http.StatusInternalServerError, "Error scanning author data", err)
+			return nil, errors.NewDBError(err)
 		}
 		if birthDate.Valid {
 			author.BirthDate = &entity.Date{Time: birthDate.Time}
@@ -53,7 +51,7 @@ func (r *repository) GetAllAuthors() ([]entity.Author, error) {
 		authors = append(authors, author)
 	}
 	if err := rows.Err(); err != nil {
-		return nil, errors.NewAppError(http.StatusInternalServerError, "Error iterating over authors", err)
+		return nil, errors.NewDBError(err)
 	}
 	return authors, nil
 }
@@ -64,9 +62,9 @@ func (r *repository) GetAuthor(authorID int) (entity.Author, error) {
 	err := r.db.QueryRow("SELECT id, first_name, last_name, biography, birth_date FROM authors WHERE id = $1", authorID).Scan(&author.ID, &author.FirstName, &author.LastName, &author.Biography, &birthDate)
 	if err != nil {
 		if err == sql.ErrNoRows {
-			return author, errors.NewNotFoundError("Author", authorID, err)
+			return author, errors.NewResourceNotFoundError("Author", authorID)
 		}
-		return author, errors.NewAppError(http.StatusInternalServerError, "Error retrieving author", err)
+		return author, errors.NewDBError(err)
 	}
 	if birthDate.Valid {
 		author.BirthDate = &entity.Date{Time: birthDate.Time}
@@ -78,7 +76,7 @@ func (r *repository) CreateAuthor(firstName, lastName, biography string, birthDa
 	var authorID int
 	err := r.db.QueryRow("INSERT INTO authors (first_name, last_name, biography, birth_date) VALUES ($1, $2, $3, $4) RETURNING id", firstName, lastName, biography, birthDate.Time).Scan(&authorID)
 	if err != nil {
-		return 0, errors.NewAppError(http.StatusInternalServerError, "Error creating author", err)
+		return 0, errors.NewDBError(err)
 	}
 	return authorID, nil
 }
@@ -97,9 +95,9 @@ func (r *repository) UpdateAuthor(author entity.Author) error {
 	result, err := r.db.Exec(query, args...)
 	rows, _ := result.RowsAffected()
 	if err != nil {
-		return errors.NewAppError(http.StatusInternalServerError, "Error updating author", err)
+		return errors.NewDBError(err)
 	} else if rows == 0 {
-		return errors.NewNotFoundError("Author", author.ID, err)
+		return errors.NewResourceNotFoundError("Author", author.ID)
 	}
 
 	return nil
@@ -109,9 +107,9 @@ func (r *repository) DeleteAuthor(authorID int) error {
 	result, err := r.db.Exec("DELETE FROM authors WHERE id = $1", authorID)
 	rows, _ := result.RowsAffected()
 	if err != nil {
-		return errors.NewAppError(http.StatusInternalServerError, "Error deleting author", err)
+		return errors.NewDBError(err)
 	} else if rows == 0 {
-		return errors.NewNotFoundError("Author", authorID, err)
+		return errors.NewResourceNotFoundError("Author", authorID)
 	}
 
 	books, err := r.GetBooksByAuthor(authorID)
@@ -129,7 +127,7 @@ func (r *repository) DeleteAuthor(authorID int) error {
 func (r *repository) GetAllBooks() ([]entity.Book, error) {
 	rows, err := r.db.Query("SELECT id, title, year, isbn, author_id FROM books")
 	if err != nil {
-		return nil, errors.NewAppError(http.StatusInternalServerError, "Error retrieving books", err)
+		return nil, errors.NewDBError(err)
 	}
 	defer rows.Close()
 
@@ -137,12 +135,12 @@ func (r *repository) GetAllBooks() ([]entity.Book, error) {
 	for rows.Next() {
 		var book entity.Book
 		if err := rows.Scan(&book.ID, &book.Title, &book.Year, &book.ISBN, &book.AuthorID); err != nil {
-			return nil, errors.NewAppError(http.StatusInternalServerError, "Error scanning book data", err)
+			return nil, errors.NewDBError(err)
 		}
 		books = append(books, book)
 	}
 	if err := rows.Err(); err != nil {
-		return nil, errors.NewAppError(http.StatusInternalServerError, "Error iterating over books", err)
+		return nil, errors.NewDBError(err)
 	}
 	return books, nil
 }
@@ -150,7 +148,7 @@ func (r *repository) GetAllBooks() ([]entity.Book, error) {
 func (r *repository) GetBooksByAuthor(authorID int) ([]entity.Book, error) {
 	rows, err := r.db.Query("SELECT id, title, year, isbn, author_id FROM books WHERE author_id = $1", authorID)
 	if err != nil {
-		return nil, errors.NewAppError(http.StatusInternalServerError, "Error retrieving books by author", err)
+		return nil, errors.NewDBError(err)
 	}
 	defer rows.Close()
 
@@ -158,12 +156,12 @@ func (r *repository) GetBooksByAuthor(authorID int) ([]entity.Book, error) {
 	for rows.Next() {
 		var book entity.Book
 		if err := rows.Scan(&book.ID, &book.Title, &book.Year, &book.ISBN, &book.AuthorID); err != nil {
-			return nil, errors.NewAppError(http.StatusInternalServerError, "Error scanning book data", err)
+			return nil, errors.NewDBError(err)
 		}
 		books = append(books, book)
 	}
 	if err := rows.Err(); err != nil {
-		return nil, errors.NewAppError(http.StatusInternalServerError, "Error iterating over books", err)
+		return nil, errors.NewDBError(err)
 	}
 	return books, nil
 }
@@ -173,9 +171,9 @@ func (r *repository) GetBook(bookID int) (entity.Book, error) {
 	err := r.db.QueryRow("SELECT id, title, year, isbn, author_id FROM books WHERE id = $1", bookID).Scan(&book.ID, &book.Title, &book.Year, &book.ISBN, &book.AuthorID)
 	if err != nil {
 		if err == sql.ErrNoRows {
-			return book, errors.NewNotFoundError("Book", bookID, err)
+			return book, errors.NewResourceNotFoundError("Book", bookID)
 		}
-		return book, errors.NewAppError(http.StatusInternalServerError, "Error retrieving book", err)
+		return book, errors.NewDBError(err)
 	}
 	return book, nil
 }
@@ -184,7 +182,7 @@ func (r *repository) CreateBook(title string, year int, isbn string, authorID in
 	var bookID int
 	err := r.db.QueryRow("INSERT INTO books (title, year, isbn, author_id) VALUES ($1, $2, $3, $4) RETURNING id", title, year, isbn, authorID).Scan(&bookID)
 	if err != nil {
-		return 0, errors.NewAppError(http.StatusInternalServerError, "Error creating book", err)
+		return 0, errors.NewDBError(err)
 	}
 	return bookID, nil
 }
@@ -203,9 +201,9 @@ func (r *repository) UpdateBook(book entity.Book) error {
 	result, err := r.db.Exec(query, args...)
 	rows, _ := result.RowsAffected()
 	if err != nil {
-		return errors.NewAppError(http.StatusInternalServerError, "Error updating book", err)
+		return errors.NewDBError(err)
 	} else if rows == 0 {
-		return errors.NewNotFoundError("Book", book.ID, err)
+		return errors.NewResourceNotFoundError("Book", book.ID)
 	}
 	return nil
 }
@@ -214,9 +212,9 @@ func (r *repository) DeleteBook(bookID int) error {
 	result, err := r.db.Exec("DELETE FROM books WHERE id = $1", bookID)
 	rows, _ := result.RowsAffected()
 	if err != nil {
-		return errors.NewAppError(http.StatusInternalServerError, "Error deleting book", err)
+		return errors.NewDBError(err)
 	} else if rows == 0 {
-		return errors.NewNotFoundError("Book", bookID, err)
+		return errors.NewResourceNotFoundError("Book", bookID)
 	}
 	return nil
 }
@@ -224,7 +222,7 @@ func (r *repository) DeleteBook(bookID int) error {
 func (r *repository) UpdateBookAndAuthor(book entity.Book, author entity.Author) error {
 	tx, err := r.db.Begin()
 	if err != nil {
-		return errors.NewAppError(http.StatusInternalServerError, "Error beginning transaction", err)
+		return errors.NewDBError(err)
 	}
 	defer func() {
 		if err != nil {
@@ -234,7 +232,6 @@ func (r *repository) UpdateBookAndAuthor(book entity.Book, author entity.Author)
 		}
 	}()
 
-	// Обновление книги
 	bookFields := extractBookFields(book)
 
 	if len(bookFields) > 0 {
@@ -243,11 +240,10 @@ func (r *repository) UpdateBookAndAuthor(book entity.Book, author entity.Author)
 		bookArgs = append(bookArgs, book.ID)
 
 		if _, err = tx.Exec(bookQuery, bookArgs...); err != nil {
-			return errors.NewAppError(http.StatusInternalServerError, "Error updating book", err)
+			return errors.NewDBError(err)
 		}
 	}
 
-	// Обновление автора
 	authorFields := extractAuthorFields(author)
 
 	if len(authorFields) > 0 {
@@ -256,14 +252,13 @@ func (r *repository) UpdateBookAndAuthor(book entity.Book, author entity.Author)
 		authorArgs = append(authorArgs, author.ID)
 
 		if _, err = tx.Exec(authorQuery, authorArgs...); err != nil {
-			return errors.NewAppError(http.StatusInternalServerError, "Error updating author", err)
+			return errors.NewDBError(err)
 		}
 	}
 
 	return nil
 }
 
-// Приватная вспомогательная функция для создания SQL-запроса обновления
 func createUpdateQuery(tableName string, fields map[string]interface{}) (string, []interface{}) {
 	setClauses := []string{}
 	args := []interface{}{}
@@ -280,7 +275,6 @@ func createUpdateQuery(tableName string, fields map[string]interface{}) (string,
 	return query, args
 }
 
-// Приватная вспомогательная функция для извлечения полей книги
 func extractBookFields(book entity.Book) map[string]interface{} {
 	fields := map[string]interface{}{}
 	if book.Title != nil {
@@ -298,7 +292,6 @@ func extractBookFields(book entity.Book) map[string]interface{} {
 	return fields
 }
 
-// Приватная вспомогательная функция для извлечения полей автора
 func extractAuthorFields(author entity.Author) map[string]interface{} {
 	fields := map[string]interface{}{}
 	if author.FirstName != nil {

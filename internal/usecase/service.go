@@ -2,8 +2,15 @@ package usecase
 
 import (
 	"api_library/internal/entity"
+	"api_library/internal/errors"
 	"api_library/internal/repository"
+	"regexp"
 	"time"
+)
+
+var (
+	isbn10Regex = regexp.MustCompile(`^\d-\d{6}-\d{2}-\d$`)
+	isbn13Regex = regexp.MustCompile(`^\d{3}-\d-\d{6}-\d{2}-\d$`)
 )
 
 type Service interface {
@@ -39,10 +46,18 @@ func (s *service) GetAuthor(id int) (entity.Author, error) {
 }
 
 func (s *service) CreateAuthor(firstName, lastName, biography string, birthDate time.Time) (int, error) {
+	validationErrors := s.validateAuthor(entity.Author{FirstName: &firstName, LastName: &lastName, Biography: &biography, BirthDate: &entity.Date{Time: birthDate}})
+	if len(validationErrors) > 0 {
+		return 0, errors.NewValidationError(validationErrors)
+	}
 	return s.repo.CreateAuthor(firstName, lastName, biography, entity.Date{Time: birthDate})
 }
 
 func (s *service) UpdateAuthor(author entity.Author) error {
+	validationErrors := s.validateAuthor(author)
+	if len(validationErrors) > 0 {
+		return errors.NewValidationError(validationErrors)
+	}
 	return s.repo.UpdateAuthor(author)
 }
 
@@ -59,10 +74,18 @@ func (s *service) GetBook(id int) (entity.Book, error) {
 }
 
 func (s *service) CreateBook(title string, year int, isbn string, authorID int) (int, error) {
+	validationErrors := s.validateBook(entity.Book{Title: &title, Year: &year, ISBN: &isbn, AuthorID: &authorID})
+	if len(validationErrors) > 0 {
+		return 0, errors.NewValidationError(validationErrors)
+	}
 	return s.repo.CreateBook(title, year, isbn, authorID)
 }
 
 func (s *service) UpdateBook(book entity.Book) error {
+	validationErrors := s.validateBook(book)
+	if len(validationErrors) > 0 {
+		return errors.NewValidationError(validationErrors)
+	}
 	return s.repo.UpdateBook(book)
 }
 
@@ -75,5 +98,94 @@ func (s *service) GetBooksByAuthor(id int) ([]entity.Book, error) {
 }
 
 func (s *service) UpdateBookWithAuthor(book entity.Book, author entity.Author) error {
+	bookValidationErrors := s.validateBookUpdateAttributes(book)
+	authorValidationErrors := s.validateAuthorUpdateAttributes(author)
+
+	if len(bookValidationErrors) > 0 && len(authorValidationErrors) > 0 {
+		return errors.NewValidationError(append(bookValidationErrors, authorValidationErrors...))
+	}
+
 	return s.repo.UpdateBookAndAuthor(book, author)
+}
+
+func (s *service) validateBook(book entity.Book) []string {
+	var validationErrors []string
+
+	if book.Title == nil || *book.Title == "" {
+		validationErrors = append(validationErrors, "title is required")
+	}
+	if book.Year == nil {
+		validationErrors = append(validationErrors, "year is required")
+	}
+	if book.AuthorID == nil {
+		validationErrors = append(validationErrors, "author_id is required")
+	}
+	if book.ISBN == nil || *book.ISBN == "" {
+		validationErrors = append(validationErrors, "ISBN is required")
+	} else if !isbn10Regex.MatchString(*book.ISBN) && !isbn13Regex.MatchString(*book.ISBN) {
+		validationErrors = append(validationErrors, "ISBN format is invalid")
+	}
+
+	return validationErrors
+}
+
+func (s *service) validateAuthor(author entity.Author) []string {
+	var validationErrors []string
+
+	if author.FirstName == nil || *author.FirstName == "" {
+		validationErrors = append(validationErrors, "first_name is required")
+	}
+	if author.LastName == nil || *author.LastName == "" {
+		validationErrors = append(validationErrors, "last_name is required")
+	}
+	if author.Biography == nil || *author.Biography == "" {
+		validationErrors = append(validationErrors, "biography is required")
+	}
+	if author.BirthDate == nil {
+		validationErrors = append(validationErrors, "birth_date is required")
+	}
+
+	return validationErrors
+}
+
+func (s *service) validateBookUpdateAttributes(book entity.Book) []string {
+	var validationErrors []string
+
+	if book.Title != nil && *book.Title == "" {
+		validationErrors = append(validationErrors, "title cannot be empty")
+	}
+	if book.Year != nil && *book.Year == 0 {
+		validationErrors = append(validationErrors, "year cannot be empty")
+	}
+	if book.AuthorID != nil && *book.AuthorID == 0 {
+		validationErrors = append(validationErrors, "author_id cannot be empty")
+	}
+	if book.ISBN != nil {
+		if *book.ISBN == "" {
+			validationErrors = append(validationErrors, "ISBN cannot be empty")
+		} else if !isbn10Regex.MatchString(*book.ISBN) && !isbn13Regex.MatchString(*book.ISBN) {
+			validationErrors = append(validationErrors, "ISBN format is invalid")
+		}
+	}
+
+	return validationErrors
+}
+
+func (s *service) validateAuthorUpdateAttributes(author entity.Author) []string {
+	var validationErrors []string
+
+	if author.FirstName != nil && *author.FirstName == "" {
+		validationErrors = append(validationErrors, "first_name cannot be empty")
+	}
+	if author.LastName != nil && *author.LastName == "" {
+		validationErrors = append(validationErrors, "last_name cannot be empty")
+	}
+	if author.Biography != nil && *author.Biography == "" {
+		validationErrors = append(validationErrors, "biography cannot be empty")
+	}
+	if author.BirthDate != nil && author.BirthDate.Time.IsZero() {
+		validationErrors = append(validationErrors, "birth_date cannot be empty")
+	}
+
+	return validationErrors
 }
